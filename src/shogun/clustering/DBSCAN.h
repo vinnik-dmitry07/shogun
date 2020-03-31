@@ -93,8 +93,8 @@ namespace shogun
 
 		SGMatrix<float64_t> points;
 
-        int16_t* cluster_types;
-		int32_t cluster_types_len;
+        int16_t* cluster_ids;
+		int32_t cluster_ids_len;
 
 	private:
 		/** Initialize attributes */

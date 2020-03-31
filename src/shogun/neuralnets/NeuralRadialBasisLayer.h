@@ -2,8 +2,8 @@
 // Created by arkan0id on 31.03.20.
 //
 
-#ifndef SHOGUN_NEURALRADIALBASISLAYER_H
-#define SHOGUN_NEURALRADIALBASISLAYER_H
+#ifndef _NEURALRADIALBASISLAYER_H__
+#define _NEURALRADIALBASISLAYER_H__
 
 #include <shogun/distance/EuclideanDistance.h>
 #include <shogun/neuralnets/NeuralLayer.h>
@@ -19,8 +19,9 @@ public:
     /** Constuctor
      *
      * @param num_neurons Number of neurons in this layer
+     * @param d Distance
      */
-    NeuralRadialBasisLayer(int32_t num_neurons, Distance* d);
+    NeuralRadialBasisLayer(int32_t num_neurons, std::shared_ptr<Distance> d);
 
     virtual ~NeuralRadialBasisLayer() {}
 
@@ -39,22 +40,11 @@ public:
     /** Computes the gradients of the error with respect to this layer's
      * pre-activations. Results are stored in m_local_gradients.
      *
-     * This is used by compute_gradients() and can be overriden to implement
-     * layers with different activation functions
-     *
      * @param targets a matrix of size num_neurons*batch_size. If is_output is
      * true, targets is the desired values for the layer's activations,
      * otherwise it's an empty matrix
      */
     virtual void compute_local_gradients(SGMatrix<float64_t> targets);
-
-    /** Computes the error between the layer's current activations and the given
-     * target activations. Should only be used with output layers
-     *
-     * @param targets desired values for the layer's activations, matrix of size
-     * num_neurons*batch_size
-     */
-    virtual float64_t compute_error(SGMatrix<float64_t> targets);
 
     virtual const char* get_name() const { return "NeuralRadialBasisLayer"; }
 
@@ -62,8 +52,8 @@ private:
     void init();
 
 protected:
-    Distance* distance;
+    std::shared_ptr<Distance> distance;
 };
 
 
-#endif // SHOGUN_NEURALRADIALBASISLAYER_H
+#endif // _NEURALRADIALBASISLAYER_H__

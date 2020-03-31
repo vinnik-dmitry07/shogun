@@ -31,15 +31,15 @@ void DBSCAN::init()
 {
 	min_points = 4;
 	epsilon = 0.75 * 0.75;
-	cluster_types = NULL;
-	cluster_types_len = 0;
+	cluster_ids = NULL;
+	cluster_ids_len = 0;
 }
 
 void DBSCAN::register_parameters()
 {
 	watch_param("min_points", &min_points);
 	watch_param("epsilon", &epsilon);
-	watch_param("cluster_types", &cluster_types, &cluster_types_len);
+	watch_param("cluster_ids", &cluster_ids, &cluster_ids_len);
 }
 
 DBSCAN::~DBSCAN()
@@ -62,15 +62,15 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	int32_t num = lhs->get_num_vectors();
 	ASSERT(num > 0)
 
-	SG_FREE(cluster_types);
-	cluster_types = SG_MALLOC(int16_t, num);
-	cluster_types_len = num;
-	SGVector<int16_t>::fill_vector(cluster_types, num, UNCLASSIFIED);
+	SG_FREE(cluster_ids);
+	cluster_ids = SG_MALLOC(int16_t, num);
+	cluster_ids_len = num;
+	SGVector<int16_t>::fill_vector(cluster_ids, num, UNCLASSIFIED);
 
 	int16_t cluster_type = CORE_POINT;
 	for (auto i : SG_PROGRESS(range(0, num)))
 	{
-		if (cluster_types[i] == UNCLASSIFIED)
+		if (cluster_ids[i] == UNCLASSIFIED)
 		{
 			if (expand_cluster(i, cluster_type) != FAILURE)
 			{
@@ -88,7 +88,7 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 
 	if (cluster_seeds.get_array_size() < min_points)
 	{
-		cluster_types[point_index] = NOISE;
+		cluster_ids[point_index] = NOISE;
 		return FAILURE;
 	}
 	else
@@ -98,7 +98,7 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 		DynamicArray<int32_t> iterSeeds;
 		for (int32_t i = 0; i < cluster_seeds.get_array_size(); ++i)
 		{
-			cluster_types[cluster_seeds[i]] = cluster_type;
+			cluster_ids[cluster_seeds[i]] = cluster_type;
 			if (points[cluster_seeds[i]] == points[point_index])
 			{
                 index_core_point = index;
@@ -121,15 +121,15 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 				for (int32_t k = 0; k < neighbor_indexes.get_array_size(); ++k)
 				{
 					int32_t neighbors_index = neighbor_indexes[k];
-					if (cluster_types[neighbors_index] == UNCLASSIFIED ||
-					    cluster_types[neighbors_index] == NOISE)
+					if (cluster_ids[neighbors_index] == UNCLASSIFIED ||
+					    cluster_ids[neighbors_index] == NOISE)
 					{
-						if (cluster_types[neighbors_index] == UNCLASSIFIED)
+						if (cluster_ids[neighbors_index] == UNCLASSIFIED)
 						{
 							cluster_seeds.push_back(neighbors_index);
 							n = cluster_seeds.get_array_size();
 						}
-						cluster_types[neighbors_index] = cluster_type;
+						cluster_ids[neighbors_index] = cluster_type;
 					}
 				}
 			}

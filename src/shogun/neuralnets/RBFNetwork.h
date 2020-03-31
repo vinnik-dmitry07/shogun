@@ -2,219 +2,45 @@
 // Created by arkan0id on 31.03.20.
 //
 
-#ifndef SHOGUN_RBFNETWORK_H
-#define SHOGUN_RBFNETWORK_H
+#ifndef _RBFNETWORK_H__
+#define _RBFNETWORK_H__
 
-/*
- * Copyright (c) 2014, Shogun Toolbox Foundation
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
-
- * 1. Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- * this list of conditions and the following disclaimer in the documentation
- * and/or other materials provided with the distribution.
- *
- * 3. Neither the name of the copyright holder nor the names of its
- * contributors may be used to endorse or promote products derived from this
- * software without specific prior written permission.
-
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- *
- * Written (W) 2014 Khaled Nasr
- */
-
-#ifndef __AUTOENCODER_H__
-#define __AUTOENCODER_H__
 
 #include <shogun/lib/common.h>
 #include <shogun/neuralnets/NeuralNetwork.h>
 #include <shogun/neuralnets/NeuralLayer.h>
+#include <shogun/neuralnets/NeuralRadialBasisLayer.h>
 
 namespace shogun
 {
-    class NeuralRadialBasisLayer;
-
-
-    class Autoencoder : public NeuralNetwork
+    class RBFNetwork : public NeuralNetwork
     {
     public:
         /** default constructor */
-        Autoencoder();
+        RBFNetwork();
 
         /** Constructor
          *
          * @param num_inputs Number of inputs
-         * @param hidden_layer Hidden layer. Can be any NeuralLayer based object
-         * that supports being used as a hidden layer
-         * @param decoding_layer Decoding layer. Must have the same number of neurons
-         * as num_inputs. Can be any NeuralLayer based object that supports being
-         * used as an output layer. If NULL, a NeuralLinearLayer is used.
-         * @param sigma Standard deviation of the gaussian used to initialize the
-         * parameters
          */
-        Autoencoder(int32_t num_inputs, const std::shared_ptr<NeuralLayer>& hidden_layer,
-                    std::shared_ptr<NeuralLayer> decoding_layer=NULL, float64_t sigma = 0.01);
+        RBFNetwork(int32_t num_inputs, int32_t num_hidden, float64_t sigma = 0.01);
 
-        /** Constructor for convolutional autoencoders
-         *
-         * @param input_width Width of the input images
-         * @param input_height height of the input images
-         * @param input_num_channels number of channels in the input images
-         * @param hidden_layer Hidden layer
-         * @param decoding_layer Decoding layer. Should have the same dimensions as
-         * the inputs.
-         * @param sigma Standard deviation of the gaussian used to initialize the
-         * parameters
-         */
-        Autoencoder(int32_t input_width, int32_t input_height, int32_t input_num_channels,
-                    const std::shared_ptr<NeuralConvolutionalLayer>& hidden_layer,
-                    const std::shared_ptr<NeuralConvolutionalLayer>& decoding_layer, float64_t sigma = 0.01);
-
-        /** Trains the autoencoder
+        /** Trains RBFNetwork
          *
          * @param data Training examples
          *
-         * @return True if training succeeded, false otherwise
+         * @return accuracy
          */
-        virtual bool train(std::shared_ptr<Features> data);
+        virtual float64_t train(std::shared_ptr<Features> data);
 
-        /** Computes the activation of the hidden layer given the input data
-         *
-         * @param data Input features
-         *
-         * @return Transformed features
-         */
-        virtual std::shared_ptr<DenseFeatures< float64_t >> transform(
-            std::shared_ptr<DenseFeatures< float64_t >> data);
-
-        /** Reconstructs the input data
-         *
-         * @param data Input features
-         *
-         * @return Reconstructed features
-         */
-        virtual std::shared_ptr<DenseFeatures< float64_t >> reconstruct(
-            std::shared_ptr<DenseFeatures< float64_t >> data);
-
-        /** Sets the contraction coefficient
-         *
-         * For contractive autoencoders [Rifai, 2011], a term:
-         * \f[ \frac{\lambda}{N} \sum_{k=0}^{N-1} \left \| J(x_k) \right \|^2_F \f]
-         * is added to the error, where \f$ \left \| J(x_k)) \right \|^2_F \f$ is the
-         * Frobenius norm of the Jacobian of the activations of the hidden layer
-         * with respect to its inputs, \f$ N \f$ is the batch size, and
-         * \f$ \lambda \f$ is the contraction coefficient.
-         *
-         * @param coeff Contraction coefficient
-         */
-        virtual void set_contraction_coefficient(float64_t coeff)
-        {
-            m_contraction_coefficient = coeff;
-            get_layer(1)->contraction_coefficient = coeff;
-        }
-
-        virtual ~Autoencoder() {}
-
-        virtual const char* get_name() const { return "Autoencoder"; }
-
-        /** Sets noise type for denoising autoencoders.
-         *
-         * If set to AENT_DROPOUT, inputs are randomly set to zero during each
-         * iteration of training with probability noise_parameter.
-         *
-         * If set to AENT_GAUSSIAN, gaussian noise with zero mean and noise_parameter
-         * standard deviation is added to the inputs.
-         *
-         * Default value is AENT_NONE
-         * @param noise_type noise type for denoising autoencoders
-         */
-        void set_noise_type(EAENoiseType noise_type)
-        {
-            m_noise_type = noise_type;
-        }
-
-        /** Returns noise type for denoising autoencoders */
-        EAENoiseType get_noise_type()
-        {
-            return m_noise_type;
-        }
-
-        /** Sets noise parameter
-         * Controls the strength of the noise, depending on noise_type
-         *
-         * @param noise_parameter controls the strength of noise
-         */
-        void set_noise_parameter(float64_t noise_parameter)
-        {
-            m_noise_parameter = noise_parameter;
-        }
-
-        /** Returns noise parameter */
-        float64_t get_noise_parameter()
-        {
-            return m_noise_parameter;
-        }
-
-    protected:
-        /** Computes the error between the output layer's activations and the given
-         * target activations.
-         *
-         * @param targets desired values for the network's output, matrix of size
-         * num_neurons_output_layer*batch_size
-         */
-        virtual float64_t compute_error(SGMatrix<float64_t> targets);
+        virtual ~RBFNetwork() {}
 
     private:
         void init();
 
-        /** Returns the section of vector v that belongs to layer i */
-        template<class T>
-        SGVector<T> get_section(SGVector<T> v, int32_t i);
-
     protected:
-        /** For contractive autoencoders [Rifai, 2011], a term:
-         * \f[ \frac{\lambda}{N} \sum_{k=0}^{N-1} \left \| J(x_k) \right \|^2_F \f]
-         * is added to the error, where \f$ \left \| J(x_k)) \right \|^2_F \f$ is the
-         * Frobenius norm of the Jacobian of the activations of the hidden layer
-         * with respect to its inputs, \f$ N \f$ is the batch size, and
-         * \f$ \lambda \f$ is the contraction coefficient.
-         *
-         * Default value is 0.0.
-         */
-        float64_t m_contraction_coefficient;
-
-        /** Noise type for denoising autoencoders.
-         *
-         * If set to AENT_DROPOUT, inputs are randomly set to zero during each
-         * iteration of training with probability noise_parameter.
-         *
-         * If set to AENT_GAUSSIAN, gaussian noise with zero mean and noise_parameter
-         * standard deviation is added to the inputs.
-         *
-         * Default value is AENT_NONE
-         */
-        EAENoiseType m_noise_type;
-
-        /** Controls the strength of the noise, depending on noise_type */
-        float64_t m_noise_parameter;
+        int32_t num_hidden;
     };
 }
-#endif
 
-
-#endif // SHOGUN_RBFNETWORK_H
+#endif // _RBFNETWORK_H__

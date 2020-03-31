@@ -14,39 +14,18 @@ NeuralRadialBasisLayer::NeuralRadialBasisLayer() : NeuralLayer()
     init();
 }
 
-NeuralRadialBasisLayer::NeuralRadialBasisLayer(int32_t num_neurons, Distance* distance_)
+NeuralRadialBasisLayer::NeuralRadialBasisLayer(int32_t num_neurons, std::shared_ptr<Distance> distance_)
 : NeuralLayer(num_neurons)
 {
     init();
-    distance = distance_;
+    distance = std::move(distance_);
 }
 
 void NeuralRadialBasisLayer::compute_activations(
     SGVector<float64_t> parameters,
     const std::vector<std::shared_ptr<NeuralLayer>>& layers)
 {
-//    NeuralLinearLayer::compute_activations(parameters, layers);
-//
-//    // to avoid exponentiating large numbers, the maximum activation is
-//    // subtracted from all the activations and the computations are done in the
-//    // log domain
-//
-//    float64_t max = m_activations.max_single();
-//
-//    for (int32_t j=0; j<m_batch_size; j++)
-//    {
-//        float64_t sum = 0;
-//        for (int32_t i=0; i<m_num_neurons; i++)
-//        {
-//            sum += std::exp(m_activations[i + j * m_num_neurons] - max);
-//        }
-//        float64_t normalizer = std::log(sum);
-//        for (int32_t k=0; k<m_num_neurons; k++)
-//        {
-//            m_activations[k + j * m_num_neurons] = std::exp(
-//                m_activations[k + j * m_num_neurons] - max - normalizer);
-//        }
-//    }
+    return exp(gamma * distance(data_point, centroid))
 }
 
 void NeuralRadialBasisLayer::compute_local_gradients(SGMatrix<float64_t> targets)
@@ -61,25 +40,9 @@ void NeuralRadialBasisLayer::compute_local_gradients(SGMatrix<float64_t> targets
 //    }
 }
 
-float64_t NeuralRadialBasisLayer::compute_error(SGMatrix<float64_t> targets)
-{
-//    int32_t len = m_num_neurons*m_batch_size;
-//    float64_t sum = 0;
-//    for (int32_t i=0; i< len; i++)
-//    {
-//        // to prevent taking the log of a zero
-//        if (m_activations[i]==0)
-//            sum += targets[i] * std::log(1e-50);
-//        else
-//            sum += targets[i] * std::log(m_activations[i]);
-//    }
-//    return -1*sum/m_batch_size;
-}
 
 void NeuralRadialBasisLayer::init()
 {
-    distance = new EuclideanDistance();
-
     SG_ADD(&distance, "distance", "Radial basis layer distance");
 
 //    SG_ADD_OPTIONS(

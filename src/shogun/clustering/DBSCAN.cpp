@@ -39,14 +39,13 @@ void DBSCAN::register_parameters()
 {
 	watch_param("min_points", &min_points);
 	watch_param("epsilon", &epsilon);
-	watch_param("cluster_ids", &cluster_ids, &data_points_num);
+    watch_param("cluster_ids", &cluster_ids, &data_points_num);
+    watch_param("data_points_num", &data_points_num);
 }
 
 DBSCAN::~DBSCAN()
 {
-	//	SG_FREE(merge_distance);
-	//	SG_FREE(assignment);
-	//	SG_FREE(pairs);
+    SG_FREE(cluster_ids);
 }
 
 bool DBSCAN::train_machine(std::shared_ptr<Features> data)
@@ -60,7 +59,7 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	ASSERT(lhs)
 
     data_points_num = lhs->get_num_vectors();
-	ASSERT(points_num > 0)
+	ASSERT(data_points_num > 0)
 
 	SG_FREE(cluster_ids);
 	cluster_ids = SG_MALLOC(int16_t, data_points_num);
@@ -92,16 +91,14 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 	}
 	else
 	{
-		int index = 0;
 		int index_core_point = 0;
 		for (int32_t i = 0; i < cluster_seeds.get_array_size(); ++i)
 		{
 			cluster_ids[cluster_seeds[i]] = cluster_id;
 			if (cluster_seeds[i] == point_index)
 			{
-                index_core_point = index;
+                index_core_point = i;
 			}
-			++index;
 		}
 
 		cluster_seeds.delete_element(index_core_point);
@@ -115,10 +112,9 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 			{
 				DynamicArray<int32_t> neighbor_indexes;
 
-				// TODO modern traverse list
-				for (int32_t k = 0; k < neighbor_indexes.get_array_size(); ++k)
+				for (int32_t j = 0; j < neighbor_indexes.get_array_size(); ++j)
 				{
-					int32_t neighbors_index = neighbor_indexes[k];
+					int32_t neighbors_index = neighbor_indexes[j];
 					if (cluster_ids[neighbors_index] == UNCLASSIFIED ||
 					    cluster_ids[neighbors_index] == NOISE)
 					{
@@ -164,12 +160,12 @@ bool DBSCAN::save(FILE* dstfile)
 	return false;
 }
 
-SGVector<int32_t> DBSCAN::get_min_points()
+int32_t DBSCAN::get_min_points()
 {
 	return min_points;
 }
 
-SGVector<float64_t> DBSCAN::get_eps()
+float64_t DBSCAN::get_eps()
 {
 	return epsilon;
 }

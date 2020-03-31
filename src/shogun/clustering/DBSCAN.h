@@ -76,9 +76,9 @@ namespace shogun
 			return false;
 		}
 
-        SGVector<int32_t> get_min_points();
+        int32_t get_min_points();
 
-        SGVector<float64_t> get_eps();
+        float64_t get_eps();
 
         int32_t get_data_points_num();
 	protected:
@@ -102,6 +102,8 @@ namespace shogun
 
 		/** Register all parameters (aka this class' attributes) */
 		void register_parameters();
+
+
 	};
 } // namespace shogun
 

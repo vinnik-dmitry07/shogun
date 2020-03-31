@@ -80,9 +80,9 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	return true;
 }
 
-int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
+int16_t DBSCAN::expand_cluster(index_t point_index, int16_t cluster_id)
 {
-	DynamicArray<int32_t> cluster_seeds = calculate_cluster(point_index);
+	DynamicArray<index_t> cluster_seeds = calculate_cluster(point_index);
 
 	if (cluster_seeds.get_array_size() < min_points)
 	{
@@ -92,7 +92,7 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 	else
 	{
 		int index_core_point = 0;
-		for (int32_t i = 0; i < cluster_seeds.get_array_size(); ++i)
+		for (index_t i = 0; i < cluster_seeds.get_array_size(); ++i)
 		{
 			cluster_ids[cluster_seeds[i]] = cluster_id;
 			if (cluster_seeds[i] == point_index)
@@ -103,18 +103,18 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 
 		cluster_seeds.delete_element(index_core_point);
 
-		for (int32_t i = 0, n = cluster_seeds.get_array_size(); i < n; ++i)
+		for (index_t i = 0, n = cluster_seeds.get_array_size(); i < n; ++i)
 		{
-			DynamicArray<int32_t> cluster_neighbors =
+			DynamicArray<index_t> cluster_neighbors =
 			    calculate_cluster(cluster_seeds[i]);
 
 			if (cluster_neighbors.get_array_size() >= min_points)
 			{
-				DynamicArray<int32_t> neighbor_indexes;
+				DynamicArray<index_t> neighbor_indexes;
 
-				for (int32_t j = 0; j < neighbor_indexes.get_array_size(); ++j)
+				for (index_t j = 0; j < neighbor_indexes.get_array_size(); ++j)
 				{
-					int32_t neighbors_index = neighbor_indexes[j];
+                    index_t neighbors_index = neighbor_indexes[j];
 					if (cluster_ids[neighbors_index] == UNCLASSIFIED ||
 					    cluster_ids[neighbors_index] == NOISE)
 					{
@@ -133,10 +133,10 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 	}
 }
 
-DynamicArray<int32_t> DBSCAN::calculate_cluster(int32_t point_index)
+DynamicArray<index_t> DBSCAN::calculate_cluster(index_t point_index)
 {
-	DynamicArray<int32_t> cluster_index;
-	for (int32_t i = 0; i < data_points_num; ++i)
+	DynamicArray<index_t> cluster_index;
+	for (index_t i = 0; i < data_points_num; ++i)
 	{
 		if (distance->distance(point_index, i) <= epsilon)
 		{

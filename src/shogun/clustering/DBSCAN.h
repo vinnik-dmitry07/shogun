@@ -84,9 +84,9 @@ namespace shogun
 	protected:
 		virtual bool train_machine(std::shared_ptr<Features> data = NULL);
 
-        int16_t expand_cluster(int32_t point_index, int16_t cluster_id);
+        int16_t expand_cluster(index_t point_index, int16_t cluster_id);
 
-		DynamicArray<int32_t> calculate_cluster(int32_t point_index);
+		DynamicArray<index_t> calculate_cluster(index_t point_index);
 
         int32_t data_points_num;
 

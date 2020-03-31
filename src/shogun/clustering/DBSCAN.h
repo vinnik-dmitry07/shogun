@@ -2,99 +2,107 @@
 // Created by arkan0id on 30.03.20.
 //
 
-#ifndef SHOGUN_DBSCAN_H
-#define SHOGUN_DBSCAN_H
+#ifndef _DBSCAN_H__
+#define _DBSCAN_H__
 
 #include <shogun/lib/config.h>
-
-#include <shogun/lib/common.h>
-#include <shogun/io/SGIO.h>
-#include <shogun/features/DenseFeatures.h>
 #include <shogun/distance/Distance.h>
+#include <shogun/features/DenseFeatures.h>
+#include <shogun/io/SGIO.h>
+#include <shogun/lib/common.h>
 #include <shogun/machine/DistanceMachine.h>
 
+#define FAILURE -3
+#define NOISE -2
+#define UNCLASSIFIED -1
+#define SUCCESS 0
+#define CORE_POINT 1
+#define BORDER_POINT 2
 
 namespace shogun
 {
-    enum EClusterType
-    {
-        UNCLASSIFIED,
-        CORE_POINT,
-        BORDER_POINT,
-        NOISE,
-        SUCCESS,
-        FAILURE
-    };
+	class DistanceMachine;
 
-    class DistanceMachine;
+	class DBSCAN : public DistanceMachine
+	{
+	public:
+		/** default constructor */
+		DBSCAN();
 
-    class DBSCAN : public DistanceMachine
-    {
-    public:
-        /** default constructor */
-        DBSCAN();
+		/** constructor
+		 *
+		 * @param min_points
+		 * @param eps
+		 * @param points
+		 * @param d distance
+		 */
+		DBSCAN(int32_t min_points, float64_t eps, std::shared_ptr<Distance> d);
 
-        /** constructor
-         *
-         * @param min_points
-         * @param eps
-         * @param points
-         * @param d distance
-         */
-        DBSCAN(uint32_t min_points, float eps, std::shared_ptr<Distance> d);
+		virtual ~DBSCAN();
 
-        virtual ~DBSCAN();
+		MACHINE_PROBLEM_TYPE(PT_MULTICLASS);
 
-        MACHINE_PROBLEM_TYPE(PT_MULTICLASS);
+		/** get classifier type
+		 *
+		 * @return classifier type DBSCAN
+		 */
+		virtual EMachineType get_classifier_type()
+		{
+			return CT_DBSCAN;
+		}
 
-        /** get classifier type
-         *
-         * @return classifier type DBSCAN
-         */
-        virtual EMachineType get_classifier_type() { return CT_DBSCAN; }
+		/** load distance machine from file
+		 *
+		 * @param srcfile file to load from
+		 * @return if loading was successful
+		 */
+		virtual bool load(FILE* srcfile);
 
-        /** load distance machine from file
-         *
-         * @param srcfile file to load from
-         * @return if loading was successful
-         */
-        virtual bool load(FILE* srcfile);
+		/** save distance machine to file
+		 *
+		 * @param dstfile file to save to
+		 * @return if saving was successful
+		 */
+		virtual bool save(FILE* dstfile);
 
-        /** save distance machine to file
-         *
-         * @param dstfile file to save to
-         * @return if saving was successful
-         */
-        virtual bool save(FILE* dstfile);
+		/** @return object name */
+		virtual const char* get_name() const
+		{
+			return "DBSCAN";
+		}
 
-        /** @return object name */
-        virtual const char* get_name() const { return "DBSCAN"; }
+		virtual bool train_require_labels() const
+		{
+			return false;
+		}
 
-        virtual bool train_require_labels() const
-        {
-            return false;
-        }
+        SGVector<int32_t> get_min_points();
 
-    protected:
-        /** Initialize training for DBSCAN algorithm */
-        void initialize_training(const std::shared_ptr<Features>& data=NULL);
+        SGVector<float64_t> get_eps();
 
-        /**
-         * Init the model (register params)
-         */
-        void init();
+	protected:
+		virtual bool train_machine(std::shared_ptr<Features> data = NULL);
 
-    protected:
-        uint32_t min_points;
+        int16_t expand_cluster(int32_t point_index, int16_t cluster_type);
 
-        float64_t epsilon;
+		DynamicArray<int32_t> calculate_cluster(int32_t point_index);
 
-        SGMatrix<float64_t> points;
+		int32_t min_points;
 
-        uint32_t point_size;
+		float64_t epsilon;
 
-        EClusterType* cluster_types;
-    };
-}
+		SGMatrix<float64_t> points;
 
-#endif // SHOGUN_DBSCAN_H
+        int16_t* cluster_types;
+		int32_t cluster_types_len;
+
+	private:
+		/** Initialize attributes */
+		void init();
+
+		/** Register all parameters (aka this class' attributes) */
+		void register_parameters();
+	};
+} // namespace shogun
+
+#endif // _DBSCAN_H__

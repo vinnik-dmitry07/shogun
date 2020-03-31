@@ -1,9 +1,9 @@
 #include <shogun/base/Parallel.h>
 #include <shogun/base/progress.h>
+#include <shogun/clustering/DBSCAN.h>
 #include <shogun/clustering/Hierarchical.h>
 #include <shogun/distance/Distance.h>
 #include <shogun/features/Features.h>
-#include <shogun/labels/Labels.h>
 #include <shogun/mathematics/Math.h>
 
 #include <utility>
@@ -16,12 +16,13 @@ DBSCAN::DBSCAN() : DistanceMachine()
 	register_parameters();
 }
 
-DBSCAN::DBSCAN(int32_t min_points_, float64_t eps_, std::shared_ptr<Distance> d)
+DBSCAN::DBSCAN(
+    int32_t min_points_, float64_t epsilon_, std::shared_ptr<Distance> d)
     : DistanceMachine()
 {
 	init();
 	min_points = min_points_;
-	eps = eps_;
+	epsilon = epsilon_;
 	set_distance(std::move(d));
 	register_parameters();
 }
@@ -43,9 +44,9 @@ void DBSCAN::register_parameters()
 
 DBSCAN::~DBSCAN()
 {
-	SG_FREE(merge_distance);
-	SG_FREE(assignment);
-	SG_FREE(pairs);
+	//	SG_FREE(merge_distance);
+	//	SG_FREE(assignment);
+	//	SG_FREE(pairs);
 }
 
 bool DBSCAN::train_machine(std::shared_ptr<Features> data)
@@ -62,20 +63,18 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	ASSERT(num > 0)
 
 	SG_FREE(cluster_types);
-	cluster_types = SG_MALLOC(EClusterType, num);
+	cluster_types = SG_MALLOC(int16_t, num);
 	cluster_types_len = num;
-	SGVector<EClusterType>::fill_vector(cluster_types, num, UNCLASSIFIED);
+	SGVector<int16_t>::fill_vector(cluster_types, num, UNCLASSIFIED);
 
-	float64_t* distances = SG_MALLOC(float64_t, num_pairs);
-
-	int32_t cluster_id = 1;
+	int16_t cluster_type = CORE_POINT;
 	for (auto i : SG_PROGRESS(range(0, num)))
 	{
 		if (cluster_types[i] == UNCLASSIFIED)
 		{
-			if (expandCluster(i, cluster_id) != FAILURE)
+			if (expand_cluster(i, cluster_type) != FAILURE)
 			{
-				cluster_id += 1;
+				cluster_type += 1;
 			}
 		}
 	}
@@ -83,11 +82,11 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	return true;
 }
 
-int DBSCAN::expandCluster(uint32_t point_index, int cluster_id)
+int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 {
 	DynamicArray<int32_t> cluster_seeds = calculate_cluster(point_index);
 
-	if (cluster_seeds.size() < min_points)
+	if (cluster_seeds.get_array_size() < min_points)
 	{
 		cluster_types[point_index] = NOISE;
 		return FAILURE;
@@ -95,43 +94,42 @@ int DBSCAN::expandCluster(uint32_t point_index, int cluster_id)
 	else
 	{
 		int index = 0;
-		int indexCorePoint = 0;
-		vector<int>::iterator iterSeeds;
-		for (int32_t iterSeeds = 0; iterSeeds != cluster_seeds.get_dim1();
-		     ++iterSeeds)
+		int index_core_point = 0;
+		DynamicArray<int32_t> iterSeeds;
+		for (int32_t i = 0; i < cluster_seeds.get_array_size(); ++i)
 		{
-			cluster_types[cluster_seeds[iterSeeds]] = cluster_id;
-			if (m_points.at(cluster_seeds[iterSeeds]).x == point.x &&
-			    m_points.at(cluster_seeds[iterSeeds]).y == point.y &&
-			    m_points.at(cluster_seeds[iterSeeds]).z == point.z)
+			cluster_types[cluster_seeds[i]] = cluster_type;
+			if (points[cluster_seeds[i]] == points[point_index])
 			{
-				indexCorePoint = index;
+                index_core_point = index;
 			}
 			++index;
 		}
-		cluster_seeds.erase(cluster_seeds.begin() + indexCorePoint);
 
-		for (vector<int>::size_type i = 0, n = cluster_seeds.size(); i < n; ++i)
+		cluster_seeds.delete_element(index_core_point);
+
+		for (int32_t i = 0, n = cluster_seeds.get_array_size(); i < n; ++i)
 		{
-			vector<int> clusterNeighors =
-			    calculateCluster(m_points.at(cluster_seeds[i]));
+			DynamicArray<int32_t> cluster_neighbors =
+			    calculate_cluster(cluster_seeds[i]);
 
-			if (clusterNeighors.size() >= m_minPoints)
+			if (cluster_neighbors.get_array_size() >= min_points)
 			{
-				vector<int>::iterator iterNeighors;
-				for (iterNeighors = clusterNeighors.begin();
-				     iterNeighors != clusterNeighors.end(); ++iterNeighors)
+				DynamicArray<int32_t> neighbor_indexes;
+
+				// TODO modern traverse list
+				for (int32_t k = 0; k < neighbor_indexes.get_array_size(); ++k)
 				{
-					if (m_points.at(*iterNeighors).cluster_id == UNCLASSIFIED ||
-					    m_points.at(*iterNeighors).clusterID == NOISE)
+					int32_t neighbors_index = neighbor_indexes[k];
+					if (cluster_types[neighbors_index] == UNCLASSIFIED ||
+					    cluster_types[neighbors_index] == NOISE)
 					{
-						if (m_points.at(*iterNeighors).cluster_id ==
-						    UNCLASSIFIED)
+						if (cluster_types[neighbors_index] == UNCLASSIFIED)
 						{
-							cluster_seeds.push_back(*iterNeighors);
-							n = cluster_seeds.size();
+							cluster_seeds.push_back(neighbors_index);
+							n = cluster_seeds.get_array_size();
 						}
-						m_points.at(*iterNeighors).cluster_id = cluster_id;
+						cluster_types[neighbors_index] = cluster_type;
 					}
 				}
 			}
@@ -141,14 +139,14 @@ int DBSCAN::expandCluster(uint32_t point_index, int cluster_id)
 	}
 }
 
-DynamicArray<int32_t> DBSCAN::calculate_cluster(uint32_t point_index)
+DynamicArray<int32_t> DBSCAN::calculate_cluster(int32_t point_index)
 {
 	DynamicArray<int32_t> cluster_index;
-	for (int32_t other_index = 0; other_index < num; ++other_index)
+	for (int32_t i = 0; i < points.size(); ++i)
 	{
-		if (distance->distance(point_index, other_index) <= epsilon)
+		if (distance->distance(point_index, i) <= epsilon)
 		{
-			cluster_index.push_back(other_index);
+			cluster_index.push_back(i);
 		}
 	}
 	return cluster_index;
@@ -168,22 +166,12 @@ bool DBSCAN::save(FILE* dstfile)
 	return false;
 }
 
-int32_t DBSCAN::get_merges()
+SGVector<int32_t> DBSCAN::get_min_points()
 {
-	return merges;
+	return min_points;
 }
 
-SGVector<int32_t> DBSCAN::get_assignment()
+SGVector<float64_t> DBSCAN::get_eps()
 {
-	return SGVector<int32_t>(assignment, table_size, false);
-}
-
-SGVector<float64_t> DBSCAN::get_merge_distances()
-{
-	return SGVector<float64_t>(merge_distance, merges, false);
-}
-
-SGMatrix<int32_t> DBSCAN::get_cluster_pairs()
-{
-	return SGMatrix<int32_t>(pairs, 2, merges, false);
+	return epsilon;
 }

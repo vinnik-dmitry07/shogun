@@ -80,21 +80,21 @@ namespace shogun
 
         SGVector<float64_t> get_eps();
 
+        int32_t get_data_points_num();
 	protected:
 		virtual bool train_machine(std::shared_ptr<Features> data = NULL);
 
-        int16_t expand_cluster(int32_t point_index, int16_t cluster_type);
+        int16_t expand_cluster(int32_t point_index, int16_t cluster_id);
 
 		DynamicArray<int32_t> calculate_cluster(int32_t point_index);
+
+        int32_t data_points_num;
 
 		int32_t min_points;
 
 		float64_t epsilon;
 
-		SGMatrix<float64_t> points;
-
         int16_t* cluster_ids;
-		int32_t cluster_ids_len;
 
 	private:
 		/** Initialize attributes */

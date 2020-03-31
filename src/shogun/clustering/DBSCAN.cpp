@@ -32,14 +32,14 @@ void DBSCAN::init()
 	min_points = 4;
 	epsilon = 0.75 * 0.75;
 	cluster_ids = NULL;
-	cluster_ids_len = 0;
+    data_points_num = 0;
 }
 
 void DBSCAN::register_parameters()
 {
 	watch_param("min_points", &min_points);
 	watch_param("epsilon", &epsilon);
-	watch_param("cluster_ids", &cluster_ids, &cluster_ids_len);
+	watch_param("cluster_ids", &cluster_ids, &data_points_num);
 }
 
 DBSCAN::~DBSCAN()
@@ -59,16 +59,15 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	auto lhs = distance->get_lhs();
 	ASSERT(lhs)
 
-	int32_t num = lhs->get_num_vectors();
-	ASSERT(num > 0)
+    data_points_num = lhs->get_num_vectors();
+	ASSERT(points_num > 0)
 
 	SG_FREE(cluster_ids);
-	cluster_ids = SG_MALLOC(int16_t, num);
-	cluster_ids_len = num;
-	SGVector<int16_t>::fill_vector(cluster_ids, num, UNCLASSIFIED);
+	cluster_ids = SG_MALLOC(int16_t, data_points_num);
+	SGVector<int16_t>::fill_vector(cluster_ids, data_points_num, UNCLASSIFIED);
 
 	int16_t cluster_type = CORE_POINT;
-	for (auto i : SG_PROGRESS(range(0, num)))
+	for (auto i : SG_PROGRESS(range(0, data_points_num)))
 	{
 		if (cluster_ids[i] == UNCLASSIFIED)
 		{
@@ -82,7 +81,7 @@ bool DBSCAN::train_machine(std::shared_ptr<Features> data)
 	return true;
 }
 
-int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
+int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_id)
 {
 	DynamicArray<int32_t> cluster_seeds = calculate_cluster(point_index);
 
@@ -95,11 +94,10 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 	{
 		int index = 0;
 		int index_core_point = 0;
-		DynamicArray<int32_t> iterSeeds;
 		for (int32_t i = 0; i < cluster_seeds.get_array_size(); ++i)
 		{
-			cluster_ids[cluster_seeds[i]] = cluster_type;
-			if (points[cluster_seeds[i]] == points[point_index])
+			cluster_ids[cluster_seeds[i]] = cluster_id;
+			if (cluster_seeds[i] == point_index)
 			{
                 index_core_point = index;
 			}
@@ -129,7 +127,7 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 							cluster_seeds.push_back(neighbors_index);
 							n = cluster_seeds.get_array_size();
 						}
-						cluster_ids[neighbors_index] = cluster_type;
+						cluster_ids[neighbors_index] = cluster_id;
 					}
 				}
 			}
@@ -142,7 +140,7 @@ int16_t DBSCAN::expand_cluster(int32_t point_index, int16_t cluster_type)
 DynamicArray<int32_t> DBSCAN::calculate_cluster(int32_t point_index)
 {
 	DynamicArray<int32_t> cluster_index;
-	for (int32_t i = 0; i < points.size(); ++i)
+	for (int32_t i = 0; i < data_points_num; ++i)
 	{
 		if (distance->distance(point_index, i) <= epsilon)
 		{
@@ -174,4 +172,9 @@ SGVector<int32_t> DBSCAN::get_min_points()
 SGVector<float64_t> DBSCAN::get_eps()
 {
 	return epsilon;
+}
+
+int32_t DBSCAN::get_data_points_num()
+{
+	return data_points_num;
 }

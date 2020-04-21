@@ -188,6 +188,7 @@ KMeansBase::compute_cluster_assignments(
             --weights_set[cluster_assignments_i];
 
             if (change_centers)
+#pragma omp critical
                 change_centers(ChangeCentersContext{lhs, i, dim,
                                             cluster_assignments_i, min_cluster,
                                             weights_set});

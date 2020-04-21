@@ -53,41 +53,39 @@ void KMeansMiniBatch::minibatch_KMeans()
 		              "iterations {} ",
 		max_iter);
 
-	auto lhs=
-		distance->get_lhs()->as<DenseFeatures<float64_t>>();
+	auto lhs = distance->get_lhs()->as<DenseFeatures<float64_t>>();
+
 	auto rhs_mus = std::make_shared<DenseFeatures<float64_t>>(cluster_centers);
-	auto rhs_cache=distance->replace_rhs(rhs_mus);
+    distance->replace_rhs(rhs_mus);
+
 	int32_t XSize=lhs->get_num_vectors();
-	int32_t dims=lhs->get_num_features();
 
 	SGVector<float64_t> v=SGVector<float64_t>(k);
 	v.zero();
 
 	for (auto i : SG_PROGRESS(range(max_iter)))
 	{
-		SGVector<int32_t> M=mbchoose_rand(batch_size,XSize);
-		SGVector<int32_t> ncent=SGVector<int32_t>(batch_size);
-		for (int32_t j=0; j<batch_size; j++)
+		SGVector<int32_t> M = mbchoose_rand(batch_size, XSize);
+		SGVector<int32_t> ncent = SGVector<int32_t>(batch_size);
+		for (int32_t j = 0; j < batch_size; j++)
 		{
-			SGVector<float64_t> dists=SGVector<float64_t>(k);
-			for (int32_t p=0; p<k; p++)
-				dists[p]=distance->distance(M[j],p);
+			SGVector<float64_t> dists = SGVector<float64_t>(k);
+			for (int32_t p = 0; p < k; p++)
+				dists[p] = distance->distance(M[j], p);
 			ncent[j] = Math::arg_min(dists.vector, 1, dists.vlen);
 		}
-		for (int32_t j=0; j<batch_size; j++)
+		for (int32_t j = 0; j < batch_size; j++)
 		{
-			int32_t near=ncent[j];
-			SGVector<float64_t> c_alive=rhs_mus->get_feature_vector(near);
-			SGVector<float64_t> x=lhs->get_feature_vector(M[j]);
-			v[near]+=1.0;
-			float64_t eta=1.0/v[near];
+			int32_t near = ncent[j];
+			SGVector<float64_t> c_alive = rhs_mus->get_feature_vector(near);
+			SGVector<float64_t> x = lhs->get_feature_vector(M[j]);
+			v[near] += 1.0;
+			float64_t eta = 1.0 / v[near];
 			linalg::add(c_alive, x, c_alive, 1.0 - eta, eta);
 		}
 		cluster_centers = rhs_mus->get_feature_matrix();
 		observe<SGMatrix<float64_t>>(i, "cluster_centers");
 	}
-
-	distance->replace_rhs(rhs_cache);
 }
 
 SGVector<int32_t> KMeansMiniBatch::mbchoose_rand(int32_t b, int32_t num)
@@ -122,7 +120,10 @@ void KMeansMiniBatch::init_mb_params()
 bool KMeansMiniBatch::train_machine(std::shared_ptr<Features> data)
 {
 	initialize_training(data);
+	auto rhs_cache = distance->get_rhs();
 	minibatch_KMeans();
+	compute_stds();
+    distance->replace_rhs(rhs_cache);
 	compute_cluster_variances();
 	return true;
 }

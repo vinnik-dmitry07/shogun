@@ -113,6 +113,31 @@ class KMeansBase : public RandomMixin<DistanceMachine>
 
 		void compute_cluster_variances();
 
+		void compute_stds();
+
+        struct ChangeCentersContext
+        {
+            std::shared_ptr<DenseFeatures<float64_t>> lhs;
+            int32_t i, dim, cluster_assignments_i, min_cluster;
+            SGVector<int64_t> weights_set;
+        };
+
+        /** Matches points and clusters
+        * @param change_centers optional coroutine to change centers in
+        * Lloyd Kmeans
+        * @return A tuple of: \n
+        * 1) an assignments vector whose index is a point number and value is
+        * a point cluster \n
+        * 2) a weights vector whose index is a cluster number and value is
+        * a number of points belong to this cluster \n
+        * 3) a number of changed assignments
+        */
+        std::tuple<SGVector<int32_t>, SGVector<int64_t>, int32_t>
+        compute_cluster_assignments(
+            int32_t num_centers,
+            std::function<void(ChangeCentersContext)> change_centers = nullptr,
+            SGVector<int32_t> cluster_assignments = SGVector<int32_t>(),
+            SGVector<int64_t> weights_set = SGVector<int64_t>());
 	protected:
 		/** Maximum number of iterations */
 		int32_t max_iter;
@@ -128,6 +153,9 @@ class KMeansBase : public RandomMixin<DistanceMachine>
 
 		/** Radi of the clusters (size k) */
 		SGVector<float64_t> R;
+
+        /** Std of the clusters (size k) */
+        SGMatrix<float64_t> stds;
 
 		/** Initial centers supplied */
 		SGMatrix<float64_t> initial_centers;

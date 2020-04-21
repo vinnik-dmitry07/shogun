@@ -43,7 +43,7 @@ class KMeansBase;
 class KMeans : public KMeansBase
 {
 	public:
-	
+
 		/** default constructor */
 		KMeans();
 
@@ -65,7 +65,7 @@ class KMeans : public KMeansBase
 		virtual ~KMeans();
 
 		/** @return object name */
-		virtual const char* get_name() const { return "KMeans"; }		
+		virtual const char* get_name() const { return "KMeans"; }
 
 	private:
 

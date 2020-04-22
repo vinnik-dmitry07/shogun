@@ -42,106 +42,85 @@ KMeans::~KMeans()
 
 void KMeans::Lloyd_KMeans(SGMatrix<float64_t> centers, int32_t num_centers)
 {
-	auto lhs =
-		std::dynamic_pointer_cast<DenseFeatures<float64_t>>(distance->get_lhs());
+	auto lhs = distance->get_lhs()->as<DenseFeatures<float64_t>>();
 
-	int32_t lhs_size=lhs->get_num_vectors();
-	int32_t dim=lhs->get_num_features();
+	int32_t lhs_size = lhs->get_num_vectors();
 
-	auto rhs_cache = distance->get_rhs();
-
-	SGVector<int32_t> cluster_assignments=SGVector<int32_t>(lhs_size);
+	SGVector<int32_t> cluster_assignments = SGVector<int32_t>(lhs_size);
 	cluster_assignments.zero();
 
 	/* Weights : Number of points in each cluster */
 	SGVector<int64_t> weights_set(num_centers);
 	weights_set.zero();
-	/* Initially set all weights for zeroth cluster, Changes in assignement step */
-	weights_set[0]=lhs_size;
+	/* Initially set all weights for zeroth cluster, Changes in assignement step
+	 */
+	weights_set[0] = lhs_size;
 
 	distance->precompute_lhs();
 
-	int32_t changed=1;
-
 	for (auto iter : SG_PROGRESS(range(max_iter)))
 	{
-		if (iter==max_iter-1)
-			io::warn("KMeans clustering has reached maximum number of ( {} ) iterations without having converged. \
-				   	Terminating. ", iter);
+		if (iter == max_iter - 1)
+			io::warn(
+				"KMeans clustering has reached maximum number of ( {} ) "
+				"iterations without having converged. Terminating. ",
+				iter);
 
-		changed=0;
-		auto rhs_mus = std::make_shared<DenseFeatures<float64_t>>(centers.clone());
+		int32_t changed;
+		auto rhs_mus =
+			std::make_shared<DenseFeatures<float64_t>>(centers.clone());
 		distance->replace_rhs(rhs_mus);
 
-#pragma omp parallel for firstprivate(lhs_size, dim, num_centers) \
-		shared(centers, cluster_assignments, weights_set) \
-		reduction(+:changed) if (!fixed_centers)
-		/* Assigment step : Assign each point to nearest cluster */
-		for (int32_t i=0; i<lhs_size; i++)
-		{
-			const int32_t cluster_assignments_i=cluster_assignments[i];
-			int32_t min_cluster, j;
-			float64_t min_dist, dist;
-
-			min_cluster=0;
-		   	min_dist=distance->distance(i,0);
-			for (j=1; j<num_centers; j++)
+		auto change_centers_step = [this,
+			                        &centers](ChangeCentersContext context) {
+			if (fixed_centers)
 			{
-				dist=distance->distance(i,j);
-				if (dist<min_dist)
+				SGVector<float64_t> vec =
+					context.lhs->get_feature_vector(context.i);
+				float64_t temp_min =
+					1.0 / context.weights_set[context.min_cluster];
+
+				/* mu_new = mu_old + (x - mu_old)/(w) */
+				for (int32_t j = 0; j < context.dim; ++j)
 				{
-					min_dist=dist;
-					min_cluster=j;
-				}
-			}
-
-			if (min_cluster!=cluster_assignments_i)
-			{
-				changed++;
-#pragma omp atomic
-				++weights_set[min_cluster];
-#pragma omp atomic
-				--weights_set[cluster_assignments_i];
-
-				if(fixed_centers)
-				{
-					SGVector<float64_t>vec=lhs->get_feature_vector(i);
-					float64_t temp_min = 1.0 / weights_set[min_cluster];
-
-					/* mu_new = mu_old + (x - mu_old)/(w) */
-					for (j=0; j<dim; j++)
-					{
-						centers(j, min_cluster)+=
-							(vec[j]-centers(j, min_cluster))*temp_min;
-					}
-
-					lhs->free_feature_vector(vec, i);
-
-					/* mu_new = mu_old - (x - mu_old)/(w-1) */
-					/* if weights_set(j)~=0 */
-					if (weights_set[cluster_assignments_i]!=0)
-					{
-						float64_t temp_i = 1.0 / weights_set[cluster_assignments_i];
-						SGVector<float64_t>vec1=lhs->get_feature_vector(i);
-
-						for (j=0; j<dim; j++)
-						{
-							centers(j, cluster_assignments_i)-=
-								(vec1[j]-centers(j, cluster_assignments_i))*temp_i;
-						}
-						lhs->free_feature_vector(vec1, i);
-					}
-					else
-					{
-						centers.get_column(cluster_assignments_i).zero();
-					}
-
+					centers(j, context.min_cluster) +=
+						(vec[j] - centers(j, context.min_cluster)) * temp_min;
 				}
 
-				cluster_assignments[i] = min_cluster;
+				context.lhs->free_feature_vector(vec, context.i);
+
+				/* mu_new = mu_old - (x - mu_old)/(w-1) */
+				/* if weights_set(j)~=0 */
+				if (context.weights_set[context.cluster_assignments_i] != 0)
+				{
+					float64_t temp_i =
+						1.0 /
+						context.weights_set[context.cluster_assignments_i];
+					SGVector<float64_t> vec1 =
+						context.lhs->get_feature_vector(context.i);
+
+					for (int32_t j = 0; j < context.dim; ++j)
+					{
+						centers(j, context.cluster_assignments_i) -=
+							(vec1[j] -
+							 centers(j, context.cluster_assignments_i)) *
+							temp_i;
+					}
+					context.lhs->free_feature_vector(vec1, context.i);
+				}
+				else
+				{
+					centers.get_column(context.cluster_assignments_i).zero();
+				}
 			}
-		}
-		if(changed==0)
+		};
+
+		std::tie(cluster_assignments, weights_set, changed) =
+			compute_cluster_assignments(
+			    num_centers, change_centers_step, cluster_assignments,
+			    weights_set);
+
+		if (changed == 0)
 			break;
 
 		/* Update Step : Calculate new means */
@@ -149,18 +128,18 @@ void KMeans::Lloyd_KMeans(SGMatrix<float64_t> centers, int32_t num_centers)
 		{
 			centers.zero();
 
-			for (int32_t i=0; i<lhs_size; i++)
+			for (int32_t i = 0; i < lhs_size; i++)
 			{
-				int32_t cluster_i=cluster_assignments[i];
+				int32_t cluster_i = cluster_assignments[i];
 
 				auto vec = lhs->get_feature_vector(i);
 				linalg::add_col_vec(centers, cluster_i, vec, centers);
 				lhs->free_feature_vector(vec, i);
 			}
 
-			for (int32_t i=0; i<num_centers; i++)
+			for (int32_t i = 0; i < num_centers; i++)
 			{
-				if (weights_set[i]!=0)
+				if (weights_set[i] != 0)
 				{
 					auto col = centers.get_column(i);
 					linalg::scale(col, col, 1.0 / weights_set[i]);
@@ -170,19 +149,20 @@ void KMeans::Lloyd_KMeans(SGMatrix<float64_t> centers, int32_t num_centers)
 
 		observe<SGMatrix<float64_t>>(iter, "cluster_centers");
 
-		if (iter%(max_iter/10) == 0)
-			io::info("Iteration[{}/{}]: Assignment of {} patterns changed.", iter, max_iter, changed);
+		if (iter % (max_iter / 10) == 0)
+			io::info(
+				"Iteration[{}/{}]: Assignment of {} patterns changed.", iter,
+				max_iter, changed);
 	}
-	distance->reset_precompute();
-	distance->replace_rhs(rhs_cache);
-
-
 }
 
 bool KMeans::train_machine(std::shared_ptr<Features> data)
 {
 	initialize_training(data);
+	auto rhs_cache = distance->get_rhs();
 	Lloyd_KMeans(cluster_centers, k);
+	compute_stds();
+	distance->replace_rhs(rhs_cache);
 	compute_cluster_variances();
 	auto cluster_centres =
 		std::make_shared<DenseFeatures<float64_t>>(cluster_centers);

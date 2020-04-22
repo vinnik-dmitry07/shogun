@@ -130,6 +130,106 @@ void KMeansBase::compute_cluster_variances()
 	}
 }
 
+std::tuple<SGVector<int32_t>, SGVector<int64_t>, int32_t>
+KMeansBase::compute_cluster_assignments(
+    int32_t num_centers,
+    std::function<void(ChangeCentersContext)> change_centers,
+    SGVector<int32_t> cluster_assignments,
+    SGVector<int64_t> weights_set)
+{
+    auto lhs =
+        std::dynamic_pointer_cast<DenseFeatures<float64_t>>(distance->get_lhs());
+
+    int32_t lhs_size=lhs->get_num_vectors();
+    int32_t dim=lhs->get_num_features();
+
+    if (!cluster_assignments.size()) {
+        cluster_assignments = SGVector<int32_t>(lhs_size);
+    }
+
+    if (!weights_set.size())
+    {
+        /* Weights : Number of points in each cluster */
+        weights_set = SGVector<int64_t> (num_centers);
+        weights_set.zero();
+        /* Initially set all weights for zeroth cluster, Changes in assignement step */
+        weights_set[0] = lhs_size;
+    }
+
+    int32_t changed = 0;
+#pragma omp parallel for firstprivate(lhs_size, dim, num_centers) \
+		shared(cluster_assignments, weights_set) \
+		reduction(+:changed)
+    /* Assigment step : Assign each point to nearest cluster */
+    for (int32_t i=0; i<lhs_size; i++)
+    {
+        const int32_t cluster_assignments_i=cluster_assignments[i];
+        int32_t min_cluster, j;
+        float64_t min_dist, dist;
+
+        min_cluster=0;
+        min_dist=distance->distance(i,0);
+        for (j=1; j<num_centers; j++)
+        {
+            dist=distance->distance(i,j);
+            if (dist<min_dist)
+            {
+                min_dist=dist;
+                min_cluster=j;
+            }
+        }
+
+        if (min_cluster!=cluster_assignments_i)
+        {
+            changed++;
+#pragma omp atomic
+            ++weights_set[min_cluster];
+#pragma omp atomic
+            --weights_set[cluster_assignments_i];
+
+            if (change_centers)
+#pragma omp critical
+                change_centers(ChangeCentersContext{lhs, i, dim,
+                                            cluster_assignments_i, min_cluster,
+                                            weights_set});
+
+            cluster_assignments[i] = min_cluster;
+        }
+    }
+    return {cluster_assignments, weights_set, changed};
+}
+
+void KMeansBase::compute_stds()
+{
+    auto lhs=
+        distance->get_lhs()->as<DenseFeatures<float64_t>>();
+    SGVector<int32_t> cluster_assignments;
+    SGVector<int64_t> weights_set;
+    std::tie(cluster_assignments, weights_set, std::ignore) =
+        compute_cluster_assignments(k);
+
+    auto cluster_indexes = new SGVector<index_t>[k];
+    auto cluster_counters = new index_t[k];
+    for (int32_t current_cluster = 0; current_cluster < k; ++current_cluster) {
+        cluster_indexes[current_cluster] = SGVector<index_t>(weights_set[current_cluster]);
+        cluster_counters[current_cluster] = 0;
+    }
+
+    for (int32_t i = 0; i < lhs->get_num_vectors(); ++i) {
+        int point_cluster = cluster_assignments[i];
+        int& cluster_counter = cluster_counters[point_cluster];
+        cluster_indexes[point_cluster][cluster_counter] = i;
+        ++cluster_counter;
+    }
+
+    for (int32_t i = 0; i < k; ++i) {
+        stds.set_column(i, lhs->copy_subset(cluster_indexes[0])->as<DenseFeatures<float64_t>>()->std());
+    }
+
+    delete[] cluster_indexes;
+    delete[] cluster_counters;
+}
+
 void KMeansBase::initialize_training(const std::shared_ptr<Features>& data)
 {
 	require(distance, "Distance is not provided");
@@ -147,22 +247,23 @@ void KMeansBase::initialize_training(const std::shared_ptr<Features>& data)
 	if (data)
 		distance->init(data, data);
 
-	auto lhs=
-		distance->get_lhs()->as<DenseFeatures<float64_t>>();
+	auto lhs = distance->get_lhs()->as<DenseFeatures<float64_t>>();
 
 	require(lhs, "Lhs features of distance not provided");
-	int32_t lhs_size=lhs->get_num_vectors();
-	dimensions=lhs->get_num_features();
-	const int32_t centers_size=dimensions*k;
+	int32_t lhs_size = lhs->get_num_vectors();
+	dimensions = lhs->get_num_features();
 
-	require(lhs_size>0, "Lhs features should not be empty");
-	require(dimensions>0, "Lhs features should have more than zero dimensions");
+	require(lhs_size > 0, "Lhs features should not be empty");
+	require(
+	    dimensions > 0, "Lhs features should have more than zero dimensions");
 
 	/* if kmeans++ to be used */
 	if (use_kmeanspp)
 		initial_centers = kmeanspp();
 
-	R=SGVector<float64_t>(k);
+	R = SGVector<float64_t>(k);
+
+	stds = SGMatrix<float64_t>(dimensions, k);
 
 	cluster_centers = SGMatrix<float64_t>(dimensions, k);
 
@@ -314,6 +415,7 @@ void KMeansBase::init()
 	    &fixed_centers, "fixed_centers", "Whether to use fixed centers",
 	    ParameterProperties::HYPER | ParameterProperties::SETTING);
 	SG_ADD(&R, "radiuses", "Cluster radiuses", ParameterProperties::MODEL);
+	SG_ADD(&stds, "stds", "Cluster standard deviations", ParameterProperties::MODEL);
 	SG_ADD(
 	    &use_kmeanspp, "kmeanspp", "Whether to use kmeans++",
 	    ParameterProperties::HYPER | ParameterProperties::SETTING);

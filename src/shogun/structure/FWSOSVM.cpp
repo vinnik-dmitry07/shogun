@@ -38,7 +38,8 @@ FWSOSVM::FWSOSVM(
 
 void FWSOSVM::init()
 {
-	SG_ADD(&m_lambda, "lambda", "Regularization constant");
+	// some languages, e.g. Python, reserve lambda as a keyword
+	SG_ADD(&m_lambda, "m_lambda", "Regularization constant");
 	SG_ADD(&m_num_iter, "num_iter", "Number of iterations");
 	SG_ADD(&m_do_line_search, "do_line_search", "Do line search");
 	SG_ADD(&m_gap_threshold, "gap_threshold", "Gap threshold");
@@ -134,7 +135,7 @@ bool FWSOSVM::train_machine(std::shared_ptr<Features> data)
 			ASSERT(loss_i - linalg::dot(m_w, psi_i) >= -1e-12);
 
 			// 4) update w_s and ell_s
-			w_s.add(psi_i);
+			linalg::add(w_s, psi_i, w_s);
 			ell_s += loss_i;
 
 

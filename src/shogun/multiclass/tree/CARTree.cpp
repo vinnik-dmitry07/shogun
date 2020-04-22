@@ -28,6 +28,8 @@
  * either expressed or implied, of the Shogun Development Team.
  */
 
+#include <algorithm>
+#include <iterator>
 #include <shogun/lib/View.h>
 #include <shogun/mathematics/Math.h>
 #include <shogun/mathematics/RandomNamespace.h>
@@ -71,7 +73,6 @@ CARTree::CARTree(
 
 CARTree::~CARTree()
 {
-
 }
 
 void CARTree::set_labels(std::shared_ptr<Labels> lab)
@@ -82,8 +83,6 @@ void CARTree::set_labels(std::shared_ptr<Labels> lab)
 		set_machine_problem_type(PT_REGRESSION);
 	else
 		error("label type supplied is not supported");
-
-
 
 	m_labels=lab;
 }
@@ -111,7 +110,28 @@ std::shared_ptr<MulticlassLabels> CARTree::apply_multiclass(std::shared_ptr<Feat
 	auto current=get_root()->as<bnode_t>();
 
 	require(current, "Tree machine not yet trained.");
-	return apply_from_current_node(data->as<DenseFeatures<float64_t>>(), current)->as<MulticlassLabels>();
+	if (auto subfeat_data =
+	        std::dynamic_pointer_cast<DenseSubSamplesFeatures<float64_t>>(data))
+	{
+		size_t num_feat = subfeat_data->get_dim_feature_space();
+		auto num_vec = subfeat_data->get_num_vectors();
+		SGMatrix<float64_t> feature_matrix(num_feat, num_vec);
+		for (size_t i = 0; i < num_vec; i++)
+		{
+			const auto& v = subfeat_data->get_computed_dot_feature_vector(i);
+			sg_memcpy(
+			    feature_matrix.get_column_vector(i), v.data(),
+			    num_feat * sizeof(float64_t));
+		}
+		return apply_from_current_node(
+		           std::make_shared<DenseFeatures<float64_t>>(feature_matrix),
+		           current)
+		    ->as<MulticlassLabels>();
+	}
+	else
+		return apply_from_current_node(
+		           data->as<DenseFeatures<float64_t>>(), current)
+		    ->as<MulticlassLabels>();
 }
 
 std::shared_ptr<RegressionLabels> CARTree::apply_regression(std::shared_ptr<Features> data)
@@ -148,15 +168,12 @@ void CARTree::prune_using_test_dataset(const std::shared_ptr<DenseFeatures<float
 			min_index=i;
 			min_error=error;
 		}
-
-
 	}
 
 	auto root=pruned_trees[min_index];
 	if (root == nullptr)
 		error("{} element is NULL",min_index);
 	this->set_root(root);
-
 }
 
 void CARTree::set_weights(SGVector<float64_t> w)
@@ -1472,12 +1489,7 @@ void CARTree::form_t1(const std::shared_ptr<bnode_t>& node)
 			node->data.num_leaves=1;
 			// set no children
 			node->set_children({});
-
-
 		}
-
-
-
 	}
 }
 

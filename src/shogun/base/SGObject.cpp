@@ -455,8 +455,10 @@ void SGObject::subscribe(const std::shared_ptr<ParameterObserver>& obs)
 	rxcpp::subscription subscription =
 	    m_observable_params
 	        ->filter([obs](std::shared_ptr<ObservedValue> v) {
-		        return obs->filter(v->get<std::string>("name"));
-		    })
+		        auto p = v->get_params().find(v->get<std::string>("name"));
+		        return obs->observes(v->get<std::string>("name")) &&
+		               obs->observes(p->second->get_properties());
+	        })
 	        .timestamp()
 	        .subscribe(sub);
 
@@ -545,16 +547,15 @@ std::string SGObject::to_string() const
 	return ss.str();
 }
 
-#ifndef SWIG // SWIG should skip this part
 std::map<std::string, std::shared_ptr<const AnyParameter>> SGObject::get_params() const
 {
 	std::map<std::string, std::shared_ptr<const AnyParameter>> result;
 	for (auto const& each: *self) {
-		result.emplace(each.first.name().data(), std::make_shared<const AnyParameter>(each.second));
+		result.emplace(std::string(each.first.name()), 
+			std::make_shared<const AnyParameter>(each.second));
 	}
 	return result;
 }
-#endif
 
 bool SGObject::equals(const SGObject* other) const
 {
